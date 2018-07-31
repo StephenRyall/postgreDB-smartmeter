@@ -4,31 +4,27 @@ const connectionString = 'postgres://pomtech@db-qswe:Welcome2ES3@db-qswe.postgre
 const db = pgp(connectionString)
 
 
-const csv = require("csv-parser");
-
-let insertArray = [];
+const csv = require("csv-parse");
 
 let parser = csv({ delimiter: ',', columns: true, trim: true });
 
 let meters = []
 let batchNo = 1;
+const columns = new pgp.helpers.ColumnSet([
+    'dual_fuel_install', 'n', 'install_date', 'install_settled', 'map_id', "mpxn", "msn",
+    "provider", "removal_status", "switch_date", "material", "rental_code", "fuel", "mod_sn"
+], { table: 'test2' });
 
+console.time("Batch")
 fs.createReadStream('./../final_dummy_07272018/final_dummy_07272018.csv')
     .pipe(parser)
     .on('data', function (meter) {
-        // console.log(meter.dual_fuel_install)
         meters.push(meter);
-        if (meters.length > 1000) {
+        if (meters.length > 10000) {
             parser.pause();
             db.tx(t => {
-                // const queries = meters.map((meter) => {
-                //     // console.log(n)
-                //     return t.one('INSERT INTO test1(map_id) VALUES($1)', [1])
-                // })
-                // console.log(meters)
-                return t.batch(meters.map((meter, map_ID) => {
-                    return t.none('INSERT INTO test2(map_ID) VALUES($1)', [map_ID])
-                }))
+                const insert = pgp.helpers.insert(meters, columns);
+                return t.none(insert)
             }).then(data => {
                 console.log(`Batch ${batchNo} done`);
                 meters = [];
@@ -43,5 +39,9 @@ fs.createReadStream('./../final_dummy_07272018/final_dummy_07272018.csv')
         // console.log(meters.length)
 
     }
-
     )
+    .on("end", () => {
+        console.timeEnd("Batch")
+
+    })
+
